@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+########################################################
 """
 DATA1_MASTER_INVENTORY.py
 Stage 1: Master Dataset Inventory & Cross-Modality Mapping
