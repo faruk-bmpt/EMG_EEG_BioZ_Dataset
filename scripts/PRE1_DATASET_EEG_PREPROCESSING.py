@@ -31,20 +31,26 @@ Scientific policy
 * Processing is deterministic and resumable.
 * A processed recording is skipped only after its NPZ + metadata pass integrity
   checks and the input SHA-256 matches the current raw file.
-* Processing output is written only under 06_PROCESSED_DATA/EEG.
+* Processing output is written only under 06_PROCESSED_DATA/EEG_MOTOR_EXECUTION and 06_PROCESSED_DATA/EEG_MOTOR_IMAGERY.
 * PRE1 does not overwrite the frozen DATA2 files in 05_QC.
 
 Output
 ------
-06_PROCESSED_DATA/EEG/
-├── MOTOR_EXECUTION/
+06_PROCESSED_DATA/
+├── EEG_MOTOR_EXECUTION/
 │   └── <Subject>/<Gesture>/<recording>_PRE1.npz
-├── MOTOR_IMAGERY/
+├── EEG_MOTOR_IMAGERY/
 │   └── <MI_ID>/<Gesture>/<recording>_PRE1.npz
 └── PRE1_QC/
-    ├── PRE1_recording_qc.csv
+    ├── separate modality metadata CSVs under PRE1_QC/EEG_MOTOR_EXECUTION and PRE1_QC/EEG_MOTOR_IMAGERY
+    ├── EEG_MOTOR_EXECUTION/
+    │   ├── PRE1_EEG_MOTOR_EXECUTION_metadata.csv
+    │   └── PRE1_EEG_MOTOR_EXECUTION_protocol.json
+    ├── EEG_MOTOR_IMAGERY/
+    │   ├── PRE1_EEG_MOTOR_IMAGERY_metadata.csv
+    │   └── PRE1_EEG_MOTOR_IMAGERY_protocol.json
     ├── PRE1_processing_summary.csv
-    ├── PRE1_protocol.json
+    ├── PRE1_FINAL_REPORT.json
     └── PRE1_RUN_LOG.txt
 
 Each NPZ contains:
@@ -106,7 +112,9 @@ EXEC_OUT = PROCESSED_DATA / "EEG_MOTOR_EXECUTION"
 MI_OUT = PROCESSED_DATA / "EEG_MOTOR_IMAGERY"
 
 PRE1_QC = PROCESSED_DATA / "PRE1_QC"
-PROTOCOL_VERSION = "PRE1-DATASET-V1.0-FINAL-FREEZE-v1.0"
+EXEC_METADATA = PRE1_QC / "EEG_MOTOR_EXECUTION"
+MI_METADATA = PRE1_QC / "EEG_MOTOR_IMAGERY"
+PROTOCOL_VERSION = "PRE1-DATASET-V1.0-FINAL-FREEZE"
 
 GLOBAL_SEED = 42
 SAMPLING_RATE_HZ = 125.0
@@ -158,22 +166,13 @@ GESTURE_DISPLAY = {
 
 SETS = ("A", "B", "C")
 
-EXPECTED_EXEC_COLS_A = [
+EXPECTED_EXEC_COLS = [
     "Sample Index",
     "Timestamp (Formatted)",
     "EMG_ch-01", "EMG_ch-02", "EMG_ch-03",
     "EEG_ch-01", "EEG_ch-02", "EEG_ch-03", "EEG_ch-04",
     "EEG_ch-05", "EEG_ch-06", "EEG_ch-07", "EEG_ch-08",
     "EEG_ch-09", "EEG_ch-10", "EEG_ch-11", "EEG_ch-12", "EEG_ch-13",
-]
-
-EXPECTED_EXEC_COLS_B = [
-    "Sample Index",
-    "Timestamp (Formatted)",
-    "EMG_ch-01", "EMG_ch-02", "EMG_ch-03",
-    "EEG_ch-04", "EEG_ch-05", "EEG_ch-06", "EEG_ch-07",
-    "EEG_ch-08", "EEG_ch-09", "EEG_ch-10", "EEG_ch-11",
-    "EEG_ch-12", "EEG_ch-13", "EEG_ch-14", "EEG_ch-15", "EEG_ch-16",
 ]
 
 EXPECTED_MI_COLS = [
@@ -183,9 +182,6 @@ EXPECTED_MI_COLS = [
     "EEG_ch-05", "EEG_ch-06", "EEG_ch-07", "EEG_ch-08",
     "EEG_ch-09", "EEG_ch-10", "EEG_ch-11", "EEG_ch-12", "EEG_ch-13",
 ]
-
-EXEC_SCHEMA_A_SUBJECTS = set(range(1, 18))
-EXEC_SCHEMA_B_SUBJECTS = set(range(18, 41))
 
 
 # ============================================================================
@@ -326,11 +322,9 @@ def validate_path_identity(path: Path, modality: str) -> dict:
 # ============================================================================
 
 def execution_expected_columns(subject_number: int):
-    if subject_number in EXEC_SCHEMA_A_SUBJECTS:
-        return EXPECTED_EXEC_COLS_A, "EXEC_SCHEMA_A_SUBJECT_01_17"
-    if subject_number in EXEC_SCHEMA_B_SUBJECTS:
-        return EXPECTED_EXEC_COLS_B, "EXEC_SCHEMA_B_SUBJECT_18_40"
-    raise ValueError(f"Unsupported execution subject: {subject_number}")
+    if not 1 <= subject_number <= 40:
+        raise ValueError(f"Unsupported execution subject: {subject_number}")
+    return EXPECTED_EXEC_COLS, "EXECUTION_CANONICAL_EEG_01_13"
 
 
 def identify_eeg_columns(columns, modality: str, subject_number: int):
@@ -343,8 +337,20 @@ def identify_eeg_columns(columns, modality: str, subject_number: int):
         raise ValueError("Input schema does not match the frozen DATA2 contract.")
 
     eeg_cols = [c for c in expected if c.startswith("EEG_ch-")]
+    canonical_eeg = [
+        f"EEG_ch-{i:02d}" for i in range(1, EXPECTED_CHANNELS + 1)
+    ]
+
+    if eeg_cols != canonical_eeg:
+        raise ValueError(
+            "EEG channel names are not canonical. "
+            f"Expected {canonical_eeg}, found {eeg_cols}"
+        )
+
     if len(eeg_cols) != EXPECTED_CHANNELS:
-        raise ValueError(f"Expected {EXPECTED_CHANNELS} EEG channels, found {len(eeg_cols)}")
+        raise ValueError(
+            f"Expected {EXPECTED_CHANNELS} EEG channels, found {len(eeg_cols)}"
+        )
 
     return eeg_cols
 
@@ -674,24 +680,18 @@ def process_recording(path: Path, modality: str):
     )
 
     out_npz.parent.mkdir(parents=True, exist_ok=True)
-    tmp_npz = out_npz.with_suffix(".npz.tmp")
+    tmp_npz = out_npz.with_name(out_npz.name + ".tmp")
 
-    np.savez_compressed(
-        tmp_npz,
-        eeg=filtered.T.astype(np.float32),
-        raw_eeg=raw.T.astype(np.float32),
-        sample_index=sample_index.astype(np.float64),
-        timestamp=timestamps.astype(str),
-        time_seconds=time_seconds,
-        windows=windows,
-    )
-
-    # np.savez appends ".npz" if the supplied temporary path does not end in
-    # ".npz". The chosen suffix already ends in ".npz.tmp", so handle the
-    # generated filename explicitly.
-    generated_tmp = Path(str(tmp_npz) + ".npz")
-    if generated_tmp.exists() and not tmp_npz.exists():
-        os.replace(generated_tmp, tmp_npz)
+    with tmp_npz.open("wb") as f:
+        np.savez_compressed(
+            f,
+            eeg=filtered.T.astype(np.float32),
+            raw_eeg=raw.T.astype(np.float32),
+            sample_index=sample_index.astype(np.float64),
+            timestamp=timestamps.astype(str),
+            time_seconds=time_seconds,
+            windows=windows,
+        )
 
     os.replace(tmp_npz, out_npz)
 
@@ -714,7 +714,9 @@ def process_recording(path: Path, modality: str):
         "samples": EXPECTED_SAMPLES,
         "nominal_duration_sec": EXPECTED_DURATION_SEC,
         "channels": EXPECTED_CHANNELS,
-        "channel_names": eeg_cols,
+        "channel_names": [
+            f"EEG_ch-{i:02d}" for i in range(1, EXPECTED_CHANNELS + 1)
+        ],
         "filter": {
             "type": "Butterworth band-pass",
             "order": FILTER_ORDER,
@@ -724,6 +726,7 @@ def process_recording(path: Path, modality: str):
         },
         "notch_filter_hz": None,
         "reference": "None in PRE1",
+        "channel_order": "EEG_ch-01 through EEG_ch-13 in ascending canonical order",
         "bad_channel_policy": "QC-only; no removal or interpolation",
         "ica": "Not performed",
         "baseline_correction": "Not performed",
@@ -917,6 +920,23 @@ def run_modality(files, modality):
 # 11. FINAL AUDIT / SENTINEL
 # ============================================================================
 
+def write_modality_metadata(result_df: pd.DataFrame, modality: str) -> None:
+    """
+    Write modality-specific PRE1 metadata/QC.
+
+    Motor Execution and Motor Imagery are intentionally kept in separate
+    metadata files because their identifiers and acquisition contexts differ.
+    """
+    if modality == "MOTOR_EXECUTION":
+        out = EXEC_METADATA / "PRE1_EEG_MOTOR_EXECUTION_metadata.csv"
+    elif modality == "MOTOR_IMAGERY":
+        out = MI_METADATA / "PRE1_EEG_MOTOR_IMAGERY_metadata.csv"
+    else:
+        raise ValueError(f"Unsupported modality: {modality}")
+
+    atomic_csv(result_df, out)
+
+
 def make_summary(result_df, inventory):
     processed = int((result_df["status"] == "PROCESSED").sum())
     skipped = int((result_df["status"] == "SKIPPED_EXISTING").sum())
@@ -954,6 +974,7 @@ def write_protocol():
         },
         "notch_filter_hz": None,
         "reference": "None in PRE1",
+        "channel_order": "EEG_ch-01 through EEG_ch-13 in ascending canonical order",
         "artifact_policy": {
             "channel_detection": "QC-only",
             "channel_removal": False,
@@ -971,7 +992,50 @@ def write_protocol():
             "MOTOR_IMAGERY": "25 MI IDs × 7 gestures × 3 sets = 525",
         },
     }
-    atomic_json(payload, PRE1_QC / "PRE1_protocol.json")
+    execution_payload = dict(payload)
+    execution_payload["modality"] = "MOTOR_EXECUTION"
+    execution_payload["identifier_policy"] = (
+        "Subject_01..Subject_40 are canonical execution participant IDs."
+    )
+    execution_payload["input_contract"] = {
+        "files": 840,
+        "structure": "Subject_<NN>/<Gesture>/S<NN>_<CODE>_Set[A-C].csv",
+        "channels": ["EEG_ch-01", "EEG_ch-02", "EEG_ch-03", "EEG_ch-04",
+                     "EEG_ch-05", "EEG_ch-06", "EEG_ch-07", "EEG_ch-08",
+                     "EEG_ch-09", "EEG_ch-10", "EEG_ch-11", "EEG_ch-12",
+                     "EEG_ch-13"],
+        "emg_channels": ["EMG_ch-01", "EMG_ch-02", "EMG_ch-03"],
+    }
+    execution_payload["metadata_output"] = (
+        "PRE1_QC/EEG_MOTOR_EXECUTION/PRE1_EEG_MOTOR_EXECUTION_metadata.csv"
+    )
+    atomic_json(
+        execution_payload,
+        EXEC_METADATA / "PRE1_EEG_MOTOR_EXECUTION_protocol.json",
+    )
+
+    imagery_payload = dict(payload)
+    imagery_payload["modality"] = "MOTOR_IMAGERY"
+    imagery_payload["identifier_policy"] = (
+        "MI_01..MI_25 are modality-local motor-imagery recording IDs; "
+        "they are not assumed to equal Subject_01..Subject_25."
+    )
+    imagery_payload["input_contract"] = {
+        "files": 525,
+        "structure": "MI_<NN>/<Gesture>/MI_<NN>_<CODE>_Set[A-C].csv",
+        "channels": ["EEG_ch-01", "EEG_ch-02", "EEG_ch-03", "EEG_ch-04",
+                     "EEG_ch-05", "EEG_ch-06", "EEG_ch-07", "EEG_ch-08",
+                     "EEG_ch-09", "EEG_ch-10", "EEG_ch-11", "EEG_ch-12",
+                     "EEG_ch-13"],
+        "emg_channels": [],
+    }
+    imagery_payload["metadata_output"] = (
+        "PRE1_QC/EEG_MOTOR_IMAGERY/PRE1_EEG_MOTOR_IMAGERY_metadata.csv"
+    )
+    atomic_json(
+        imagery_payload,
+        MI_METADATA / "PRE1_EEG_MOTOR_IMAGERY_protocol.json",
+    )
 
 
 def main():
@@ -988,7 +1052,7 @@ def main():
     log(f"Protocol version: {PROTOCOL_VERSION}")
     log("RAW DATA MODIFICATION: NONE")
     log("Resume mode: ENABLED")
-    log("Motor Execution and Motor Imagery are processed independently.")
+    log("Motor Execution and Motor Imagery are processed independently with separate PRE1 metadata.")
     log("Processing time axis: row order + nominal 125 Hz.")
     log("Raw formatted timestamps and Sample Index are preserved as metadata.")
     log(
@@ -1011,6 +1075,8 @@ def main():
     EXEC_OUT.mkdir(parents=True, exist_ok=True)
     MI_OUT.mkdir(parents=True, exist_ok=True)
     PRE1_QC.mkdir(parents=True, exist_ok=True)
+    EXEC_METADATA.mkdir(parents=True, exist_ok=True)
+    MI_METADATA.mkdir(parents=True, exist_ok=True)
 
     write_protocol()
 
@@ -1040,10 +1106,9 @@ def main():
 
     result_df = pd.concat([exec_df, mi_df], ignore_index=True)
 
-    atomic_csv(
-        result_df,
-        PRE1_QC / "PRE1_recording_qc.csv",
-    )
+    # Keep PRE1 metadata/QC separate by acquisition condition.
+    write_modality_metadata(exec_df, "MOTOR_EXECUTION")
+    write_modality_metadata(mi_df, "MOTOR_IMAGERY")
 
     exec_summary = make_summary(exec_df, exec_inventory)
     mi_summary = make_summary(mi_df, mi_inventory)
