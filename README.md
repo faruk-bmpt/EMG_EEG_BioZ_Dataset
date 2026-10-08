@@ -1,4 +1,4 @@
-# Multimodal EEG–EMG–Bioimpedance Dataset for Motor Execution and Motor Imagery
+# A multimodal Physiological Dataset for Hand Gesture Classification for Prosthetic Hand Control
 
 A multimodal biosignal dataset developed for research on **motor execution, motor imagery, and hand gesture recognition**, integrating electroencephalography (EEG), surface electromyography (EMG), and bioimpedance (BioZ) measurements.
 
