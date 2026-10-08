@@ -1,4 +1,5 @@
-####################################################################
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 """
 ====================================================================
@@ -64,10 +65,22 @@ from pathlib import Path
 # 1. CONFIGURATION
 # ====================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-)
+# Resolve the frozen dataset root from the script location.
+# Supports the canonical layout:
+#   <dataset_root>/scripts/ANNOTATION_POLICY_DATASET_V1.py
+# and a script placed directly under <dataset_root>.
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA under the "
+        "script directory or its parent."
+    )
 
 RAW = ROOT / "01_RAW_DATA"
 PROCESSED = ROOT / "06_PROCESSED_DATA"
@@ -741,7 +754,7 @@ def build_bioz_inventory() -> list[dict]:
                 "MEASUREMENT_UNIT",
 
             "protocol":
-                "MOTOR_EXECUTION",
+                "BIOIMPEDANCE",
 
             "modality":
                 "BIOIMPEDANCE",
@@ -1047,7 +1060,7 @@ def create_schema() -> None:
             "type": "categorical",
             "required": "YES",
             "description":
-                "MOTOR_EXECUTION or MOTOR_IMAGERY.",
+                "MOTOR_EXECUTION, MOTOR_IMAGERY, or BIOIMPEDANCE.",
         },
         {
             "field": "modality",
