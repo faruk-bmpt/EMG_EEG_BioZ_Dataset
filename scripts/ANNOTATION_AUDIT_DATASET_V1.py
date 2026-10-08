@@ -1,5 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
-###################################################################
 """
 ====================================================================
 ANNOTATION AUDIT — DATASET V1.0
@@ -59,10 +60,22 @@ import numpy as np
 # 1. CONFIGURATION
 # ====================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-)
+# Resolve the dataset root from the location of this canonical script.
+# This supports the frozen Windows dataset layout without hard-coded
+# machine-specific paths.
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Could not locate the dataset root. Expected '01_RAW_DATA' "
+        "in the script directory or its parent.\n"
+        f"Script directory: {SCRIPT_DIR}"
+    )
 
 RAW = ROOT / "01_RAW_DATA"
 PROCESSED = ROOT / "06_PROCESSED_DATA"
