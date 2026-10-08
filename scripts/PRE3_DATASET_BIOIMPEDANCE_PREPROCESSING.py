@@ -74,7 +74,21 @@ import numpy as np
 PROTOCOL_VERSION = "PRE3-DATASET-V1.0-FINAL-FREEZE"
 
 SCRIPT_PATH = Path(__file__).resolve()
-PROJECT_ROOT = SCRIPT_PATH.parent.parent
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+# Resolve the dataset root robustly whether this script is placed in:
+#   <dataset_root>/scripts/
+# or directly in:
+#   <dataset_root>/
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    PROJECT_ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    PROJECT_ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA under the "
+        "script directory or its parent."
+    )
 
 RAW_BIOZ = PROJECT_ROOT / "01_RAW_DATA" / "BIOIMPEDANCE"
 PROCESSED_BIOZ = (
