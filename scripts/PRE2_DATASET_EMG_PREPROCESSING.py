@@ -22,7 +22,7 @@ Output
 06_PROCESSED_DATA/EMG/
     one compressed NPZ + one JSON provenance file per recording
 
-06_PROCESSED_DATA/EMG/PRE2_QC/
+06_PROCESSED_DATA/EMG/PRE2_QC/EMG_MOTOR_EXECUTION/
     recording-level QC/provenance tables and final audit
 
 Frozen processing contract
@@ -91,10 +91,11 @@ PROCESSED_ROOT = ROOT / "06_PROCESSED_DATA" / "EMG"
 OUTPUT_ROOT = PROCESSED_ROOT
 
 QC_ROOT = PROCESSED_ROOT / "PRE2_QC"
+EMG_METADATA = QC_ROOT / "EMG_MOTOR_EXECUTION"
 
-SENTINEL = QC_ROOT / "_PRE2_COMPLETE.json"
+SENTINEL = EMG_METADATA / "_PRE2_COMPLETE.json"
 
-PROTOCOL_VERSION = "PRE2-DATASET-V1.0-FINAL-FREEZE-v1.0"
+PROTOCOL_VERSION = "PRE2-DATASET-V1.0-FINAL-FREEZE"
 
 EXPECTED_SUBJECTS = tuple(range(1, 41))
 EXPECTED_GESTURES = (
@@ -653,7 +654,7 @@ def main():
     t0 = time.time()
 
     print("=" * 100)
-    print("PRE2 — EMG SIGNAL PREPROCESSING & ARTIFACT QC")
+    print("PRE2 — EMG MOTOR EXECUTION SIGNAL PREPROCESSING & ARTIFACT QC")
     print("DATASET PAPER / FINAL DATASET V1.0")
     print("=" * 100)
 
@@ -690,13 +691,14 @@ def main():
 
     OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
     QC_ROOT.mkdir(parents=True, exist_ok=True)
+    EMG_METADATA.mkdir(parents=True, exist_ok=True)
 
     files, inventory = discover_inventory()
 
     log(
         f"INPUT INVENTORY "
         f"{'PASS' if inventory['pass'] else 'FAIL'} | "
-        f"Motor Execution: "
+        f"EMG Motor Execution: "
         f"{inventory['actual_recordings']}/{inventory['expected_recordings']}"
     )
 
@@ -718,7 +720,7 @@ def main():
     for i, path in enumerate(files, 1):
         if i == 1 or i % 25 == 0 or i == len(files):
             log(
-                f"MOTOR_EXECUTION PRE2: "
+                f"EMG_MOTOR_EXECUTION PRE2: "
                 f"{i}/{len(files)}"
             )
 
@@ -789,24 +791,24 @@ def main():
 
     write_csv(
         results_df,
-        QC_ROOT / "PRE2_recording_processing_status.csv",
+        EMG_METADATA / "PRE2_recording_processing_status.csv",
     )
 
     write_csv(
         channel_df,
-        QC_ROOT / "EMG_signal_quality.csv",
+        EMG_METADATA / "EMG_signal_quality.csv",
     )
 
     write_csv(
         temporal_df,
-        QC_ROOT / "timestamp_QC.csv",
+        EMG_METADATA / "timestamp_QC.csv",
     )
 
     # Recording-level summary.
     summary = pd.DataFrame(
         [
             {
-                "modality": "EMG",
+                "modality": "EMG_MOTOR_EXECUTION",
                 "condition": "MOTOR_EXECUTION",
                 "expected_recordings": EXPECTED_RECORDINGS,
                 "input_recordings": len(files),
@@ -828,7 +830,7 @@ def main():
 
     write_csv(
         summary,
-        QC_ROOT / "PRE2_processing_summary.csv",
+        EMG_METADATA / "PRE2_processing_summary.csv",
     )
 
     # Channel-level summary.
@@ -855,7 +857,7 @@ def main():
 
     write_csv(
         channel_summary,
-        QC_ROOT / "EMG_channel_quality_summary.csv",
+        EMG_METADATA / "EMG_channel_quality_summary.csv",
     )
 
     # Final audit: every expected recording must have a valid output.
@@ -892,6 +894,8 @@ def main():
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "protocol_version": PROTOCOL_VERSION,
         "dataset_root": str(ROOT),
+        "modality": "EMG_MOTOR_EXECUTION",
+        "condition": "MOTOR_EXECUTION",
         "raw_data_modified": False,
         "expected_recordings": EXPECTED_RECORDINGS,
         "input_recordings": len(files),
@@ -921,7 +925,7 @@ def main():
 
     atomic_json(
         final_report,
-        QC_ROOT / "PRE2_FINAL_REPORT.json",
+        EMG_METADATA / "PRE2_FINAL_REPORT.json",
     )
 
     if complete:
