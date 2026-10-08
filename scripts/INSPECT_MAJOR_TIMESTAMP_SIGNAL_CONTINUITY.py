@@ -19,11 +19,14 @@ It does NOT:
 
 Scientific question
 -------------------
-When a recording contains a large timestamp gap, are the actual physiological
-signal samples still numerically valid and changing normally around that gap?
+When a recording contains a large timestamp gap, are the retained physiological
+signal samples numerically valid and changing normally around that gap, while the
+raw timestamps are preserved and the analytical time base remains sample order at
+nominal 125 Hz?
 
 The script:
-    1. Reads the previously generated timestamp inspection report.
+    1. Reads the previously generated timestamp inspection report from
+       INSPECT_EXECUTION_TIMESTAMP_INDEX_ISSUES.py.
     2. Selects the worst affected recordings.
     3. Finds the largest positive timestamp gap in each file.
     4. Prints ±20 rows around that gap.
@@ -34,7 +37,7 @@ The script:
     9. Writes a compact CSV summary.
 
 Expected raw structure:
-    01_RAW_DATA/MOTOR_EXECUTION/
+    01_RAW_DATA/EMG_EEG_SYNCHRONIZED/
 
 Expected recording:
     5625 rows
@@ -44,23 +47,20 @@ Expected recording:
 
 
 from pathlib import Path
-import json
 import sys
 
 import numpy as np
 import pandas as pd
-
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
 
 ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/"
-    "Data_Set_Paper_Work/EEG_EMG_BIOZ_DATASET"
+    r"F:\Faruk\OFS_Paper_Work\Data_Set_Paper_Work\EEG_EMG_BIOZ_DATASET"
 )
 
-RAW_ROOT = ROOT / "01_RAW_DATA" / "MOTOR_EXECUTION"
+RAW_ROOT = ROOT / "01_RAW_DATA" / "EMG_EEG_SYNCHRONIZED"
 
 INSPECTION_ROOT = (
     ROOT
@@ -103,6 +103,16 @@ SIGNAL_CONTEXT = 20
 
 # Numerical threshold for constant signal detection
 FLAT_STD_THRESHOLD = 1e-12
+
+# Frozen acquisition / retention specification
+NOMINAL_SAMPLING_RATE_HZ = 125.0
+EXPECTED_ROWS = 5625
+NOMINAL_DURATION_SECONDS = EXPECTED_ROWS / NOMINAL_SAMPLING_RATE_HZ
+
+# Raw timestamps are preserved acquisition/export metadata.
+# Timestamp irregularities are diagnosed but are NOT used to redefine
+# the sampling frequency or analytical duration.
+# Downstream analysis uses sample order + nominal 125 Hz.
 
 
 # ============================================================
@@ -502,7 +512,6 @@ def print_local_context(
 
 def inspect_one_file(
     relative_file,
-    report_row,
     file_number,
 ):
 
@@ -560,6 +569,21 @@ def inspect_one_file(
     log(
         f"EEG channels: {len(eeg_cols)}"
     )
+
+    # --------------------------------------------------------
+    # FROZEN RETENTION / ANALYTICAL TIME BASE
+    # --------------------------------------------------------
+
+    nominal_duration = len(df) / NOMINAL_SAMPLING_RATE_HZ
+
+    log(f"Nominal sampling rate : {NOMINAL_SAMPLING_RATE_HZ:.1f} Hz")
+    log(f"Retained rows          : {len(df)}")
+    log(f"Nominal duration       : {nominal_duration:.3f} s")
+    log("Analytical time base   : sample order + nominal 125 Hz")
+    log("Raw timestamps         : preserved acquisition/export metadata")
+
+    if len(df) != EXPECTED_ROWS:
+        log(f"WARNING: Expected {EXPECTED_ROWS} rows, found {len(df)}.")
 
     # --------------------------------------------------------
     # BASIC SIGNAL INTEGRITY
@@ -809,6 +833,11 @@ def inspect_one_file(
 
         "rows": len(df),
         "columns": len(df.columns),
+        "nominal_sampling_rate_hz": NOMINAL_SAMPLING_RATE_HZ,
+        "nominal_duration_seconds": nominal_duration,
+        "expected_rows": EXPECTED_ROWS,
+        "row_count_matches_expected": bool(len(df) == EXPECTED_ROWS),
+        "analytical_time_base": "sample_order_nominal_125_Hz",
 
         "emg_channels": len(emg_cols),
         "eeg_channels": len(eeg_cols),
@@ -966,12 +995,25 @@ def main():
         f"Inspection report rows: {len(report)}"
     )
 
-    if "timestamp_max_gap_ms" not in report.columns:
+    required_report_columns = {
+        "file",
+        "timestamp_max_gap_ms",
+        "timestamp_gaps_gt_50ms",
+        "timestamp_gaps_gt_100ms",
+        "sample_index_minus254_wraps",
+        "sample_index_other_negative",
+        "classification",
+    }
 
+    missing_report_columns = sorted(
+        required_report_columns.difference(report.columns)
+    )
+
+    if missing_report_columns:
         log(
-            "ERROR: timestamp_max_gap_ms column missing."
+            "ERROR: Required columns missing from inspection report: "
+            + ", ".join(missing_report_columns)
         )
-
         sys.exit(1)
 
     # --------------------------------------------------------
@@ -1012,20 +1054,21 @@ def main():
     )
     log("-" * 110)
 
+    selected_display_cols = [
+        "file",
+        "timestamp_max_gap_ms",
+        "timestamp_gaps_gt_50ms",
+        "timestamp_gaps_gt_100ms",
+        "sample_index_minus254_wraps",
+        "sample_index_other_negative",
+        "classification",
+    ]
+    selected_display_cols = [
+        c for c in selected_display_cols if c in selected.columns
+    ]
+
     log(
-        selected[
-            [
-                "file",
-                "timestamp_max_gap_ms",
-                "timestamp_gaps_gt_50ms",
-                "timestamp_gaps_gt_100ms",
-                "sample_index_minus254_wraps",
-                "sample_index_other_negative",
-                "classification",
-            ]
-        ].to_string(
-            index=False
-        )
+        selected[selected_display_cols].to_string(index=False)
     )
 
     # --------------------------------------------------------
@@ -1058,7 +1101,6 @@ def main():
 
             result = inspect_one_file(
                 relative_file,
-                report_row,
                 n
             )
 
@@ -1120,20 +1162,21 @@ def main():
     if len(summary):
 
         log("")
+        summary_display_cols = [
+            "file",
+            "largest_timestamp_gap_ms",
+            "sample_index_step_at_gap",
+            "global_signal_nan",
+            "global_signal_inf",
+            "global_constant_channels",
+            "local_classification",
+        ]
+        summary_display_cols = [
+            c for c in summary_display_cols if c in summary.columns
+        ]
+
         log(
-            summary[
-                [
-                    "file",
-                    "largest_timestamp_gap_ms",
-                    "sample_index_step_at_gap",
-                    "global_signal_nan",
-                    "global_signal_inf",
-                    "global_constant_channels",
-                    "local_classification",
-                ]
-            ].to_string(
-                index=False
-            )
+            summary[summary_display_cols].to_string(index=False)
         )
 
         log("")
@@ -1159,13 +1202,11 @@ def main():
     )
 
     log("")
-    log(
-        "RAW DATA MODIFICATION: NONE"
-    )
-
-    log(
-        "INSPECTION STATUS: COMPLETE"
-    )
+    log("RAW DATA MODIFICATION: NONE")
+    log("TIMESTAMP HANDLING: PRESERVED; NOT USED TO REDEFINE SAMPLING RATE")
+    log("ANALYTICAL TIME BASE: SAMPLE ORDER + NOMINAL 125 HZ")
+    log("RETENTION SPECIFICATION: 5625 SAMPLES = 45 NOMINAL SECONDS")
+    log("INSPECTION STATUS: COMPLETE")
 
     log("=" * 110)
 
