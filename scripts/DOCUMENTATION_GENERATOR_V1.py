@@ -35,10 +35,18 @@ import sys
 # 1. AUTHORITATIVE PATHS
 # ============================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-)
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA next to this script "
+        "or one directory above it."
+    )
+ROOT = ROOT.resolve()
 
 RAW = ROOT / "01_RAW_DATA"
 VIEWS = ROOT / "02_MODALITY_VIEWS"
@@ -185,7 +193,7 @@ def verify_source_sha():
     #
     # freeze_status_verified: true
     # checksum_algorithm: SHA-256
-    # files_hashed: 18622
+    # files_hashed: 18588
     # read_only: true
     # raw_data_modified: false
     # processed_data_modified: false
@@ -207,10 +215,10 @@ def verify_source_sha():
             f"{sha.get('checksum_algorithm')!r}"
         )
 
-    if sha.get("files_hashed") != 18622:
+    if sha.get("files_hashed") != 18588:
         fail(
             "unexpected source SHA-256 file count: "
-            f"{sha.get('files_hashed')!r}; expected 18622"
+            f"{sha.get('files_hashed')!r}; expected 18588"
         )
 
     if sha.get("read_only") is not True:
@@ -231,7 +239,7 @@ def verify_source_sha():
             )
 
     if sha.get("checksum_catalog_sha256") != (
-        "1a5bcb14c598205f8a497215d8a54aea466b1ae9ec15dc0433b42b66ae250ec6"
+        "50459fa6298fc8a0487a7bebd18e63bedd86a22514b8ab821e9eab0d8fdb76bb"
     ):
         fail("source checksum catalog SHA-256 does not match frozen value")
 
@@ -377,7 +385,7 @@ were not inferred or fabricated.
 
 ## Integrity
 
-The source SHA-256 catalog contains 18,622 hashed files.
+The source SHA-256 catalog contains 18,588 hashed files.
 
 Source checksum catalog SHA-256:
 
@@ -512,7 +520,7 @@ magnitude/phase representations.
 
 ## 1. Motor-execution CSV
 
-### Schema A — Subjects 01–17
+### Canonical motor-execution schema — all retained subjects
 
 ```text
 Sample Index
@@ -523,16 +531,10 @@ EMG_ch-03
 EEG_ch-01 ... EEG_ch-13
 ```
 
-### Schema B — Subjects 18–40
-
-```text
-Sample Index
-Timestamp (Formatted)
-EMG_ch-01
-EMG_ch-02
-EMG_ch-03
-EEG_ch-04 ... EEG_ch-16
-```
+The released motor-execution files use the canonical EEG channel names
+`EEG_ch-01` through `EEG_ch-13`. For source recordings whose physical
+OpenBCI labels were CH4–CH16, the released column names were standardized to
+this canonical 13-channel naming scheme; signal values were preserved.
 
 Each motor-execution recording contains 5,625 rows.
 
@@ -656,7 +658,10 @@ derived from Re/Im.
 Raw files and source fields are preserved. Timestamp and sample-index
 irregularities are documented rather than rewritten.
 
-No raw-data modification was performed during V1.0 processing.
+No physiological signal values were modified during V1.0 processing. A targeted
+Sample Index correction was applied to 31 motor-execution files to resolve
+acquisition-counter rollover/non-monotonic index metadata; timestamps and
+physiological signal columns were preserved.
 """
 
     documents["ANNOTATION_GUIDE_V1.0.md"] = """# Annotation Guide V1.0
@@ -715,7 +720,7 @@ EEG/EMG or motor-imagery EEG.
 | Annotation Policy | PASS |
 | Dataset Freeze | PASS |
 | Source SHA-256 | COMPLETE |
-| Release Packaging | COMPLETE |
+| Release Packaging | DOCUMENTATION COPIED |
 
 ## Recorded DATA2 warnings
 
@@ -723,7 +728,7 @@ EEG/EMG or motor-imagery EEG.
 - Motor-imagery timestamp large-gap warnings: 61
 - Motor-execution constant-channel records: 1
 - Motor-imagery constant-channel records: 12
-- Motor-execution negative sample-index steps: 357
+- Motor-execution negative sample-index steps: 326
 - Motor-imagery negative sample-index steps: 0
 
 The motor-execution negative sample-index steps are associated with the
@@ -972,6 +977,8 @@ def main():
             policy.get("annotation_policy"),
         "external_facts_inferred": False,
         "raw_data_modified": False,
+        "physiological_signal_values_modified": False,
+        "sample_index_metadata_corrected_before_freeze": True,
         "processed_data_modified": False,
         "preprocessing_rerun": False,
         "feature_extraction_performed": False,
