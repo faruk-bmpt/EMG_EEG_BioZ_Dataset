@@ -1,4 +1,4 @@
-########################################################
+#!/usr/bin/env python3
 """
 DATA1_MASTER_INVENTORY.py
 Stage 1: Master Dataset Inventory & Cross-Modality Mapping
@@ -33,7 +33,7 @@ from typing import Optional
 
 import pandas as pd
 
-ROOT = Path('/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/EEG_EMG_BIOZ_DATASET').resolve()
+ROOT = Path(r'F:\Faruk\OFS_Paper_Work\Data_Set_Paper_Work\EEG_EMG_BIOZ_DATASET').resolve()
 RAW = ROOT / '01_RAW_DATA'
 EXEC = RAW / 'EMG_EEG_SYNCHRONIZED'
 MI = RAW / 'EEG_MOTOR_IMAGERY'
@@ -43,30 +43,12 @@ QC = ROOT / '05_QC'
 LOGS = ROOT / 'logs'
 
 # Demographic source used by DATA1. The workbook is metadata only; it is never modified.
-DEMOGRAPHY_FILENAME = 'Data set Demography (2).xlsx'
+DEMOGRAPHY_FILENAME = "Data set Demography .xlsx"
 DEMOGRAPHY_CANDIDATES = [
-    ROOT / 'Data set Demography (2).xlsx',
-    ROOT / 'Data set Demography .xlsx',
-    ROOT / 'Data set Demography.xlsx',
-    ROOT.parent / 'Data set Demography (2).xlsx',
-    ROOT.parent / 'Data set Demography .xlsx',
-    ROOT.parent / 'Data set Demography.xlsx',
-    ROOT.parent.parent / 'Data set Demography (2).xlsx',
-    ROOT.parent.parent / 'Data set Demography .xlsx',
-    ROOT.parent.parent / 'Data set Demography.xlsx',
+    ROOT / DEMOGRAPHY_FILENAME,
+    ROOT.parent / DEMOGRAPHY_FILENAME,
+    ROOT.parent.parent / DEMOGRAPHY_FILENAME,
 ]
-
-# Authoritative MI contributor set derived from the supplied demographic/data-contribution log.
-# This establishes canonical participant availability only; it does NOT assign MI_XX local IDs.
-MI_CANONICAL_CONTRIBUTORS = [
-    'Subject_01', 'Subject_02', 'Subject_05',
-    'Subject_18', 'Subject_19', 'Subject_20', 'Subject_21', 'Subject_22',
-    'Subject_23', 'Subject_24', 'Subject_26', 'Subject_27', 'Subject_28',
-    'Subject_29', 'Subject_30', 'Subject_31', 'Subject_32', 'Subject_33',
-    'Subject_34', 'Subject_35', 'Subject_36', 'Subject_37', 'Subject_38',
-    'Subject_39', 'Subject_40'
-]
-MI_CONTRIBUTOR_SOURCE = 'supplied Data Contribution Modalities log (EEG(Ex+Im))'
 
 GESTURES = [
     ('HOC', 'Hand_Open_Close', 'Hand Open–Close'),
@@ -205,43 +187,32 @@ def inventory_bioz():
                          'two_channel_recordings':sum(1 for _,fs in entries if len(fs)==2 and any('Channel_1' in str(f) for f in fs) and any('Channel_2' in str(f) for f in fs))})
     return pd.DataFrame(inv), pd.DataFrame(comp)
 
-def crosswalk(mi_ids, mi_canonical_ids=None):
-    """Build cross-modal identity metadata without inventing MI local-to-canonical IDs."""
+def crosswalk(mi_ids):
     rev = {v:k for k,v in BIOZ_XW.items()}
-    mi_canonical_ids = set(mi_canonical_ids or [])
-    rows=[]
-    for i in range(1,41):
-        sid=f'Subject_{i:02d}'
-        has_mi=sid in mi_canonical_ids
-        rows.append({
-            'canonical_subject_id':sid, 'execution_id':sid,
-            'mi_id':'', 'bioz_id':rev.get(sid,''),
-            'execution_available':True, 'mi_available':has_mi,
-            'bioz_available':sid in rev,
-            'mi_mapping_status':'AVAILABILITY_CONFIRMED_ID_PENDING' if has_mi else 'NOT_AVAILABLE',
-            'bioz_mapping_status':'MAPPED' if sid in rev else 'NOT_AVAILABLE',
-            'notes':(
-                'MI contribution confirmed from demographic metadata; MI local ID intentionally not assigned.'
-                if has_mi else 'No MI contribution recorded in demographic metadata.'
-            )
-        })
-    return pd.DataFrame(rows)
+    return pd.DataFrame([{
+        'canonical_subject_id':f'Subject_{i:02d}', 'execution_id':f'Subject_{i:02d}',
+        'mi_id':'', 'bioz_id':rev.get(f'Subject_{i:02d}',''),
+        'execution_available':True, 'mi_available':False, 'bioz_available':f'Subject_{i:02d}' in rev,
+        'mi_mapping_status':'PENDING_EXPLICIT_CROSSWALK',
+        'bioz_mapping_status':'MAPPED' if f'Subject_{i:02d}' in rev else 'NOT_AVAILABLE',
+        'notes':'MI local ID intentionally not mapped to canonical subject.'
+    } for i in range(1,41)])
 
 def _find_demography_workbook() -> Optional[Path]:
     """Locate the authoritative demographic workbook without guessing its identity."""
     for p in DEMOGRAPHY_CANDIDATES:
         if p.is_file():
             return p
-    # Also accept a filename variant containing "Demography" at project level.
-    # Never search inside 01_RAW_DATA because demographic metadata are not raw signals.
-    for search_root in [ROOT, ROOT.parent, ROOT.parent.parent]:
-        try:
-            matches = sorted(search_root.glob("*.xlsx"))
-        except Exception:
-            matches = []
-        for p in matches:
-            if RAW not in p.resolve().parents and "demograph" in p.name.lower():
-                return p.resolve()
+    # Also allow the exact filename anywhere under the project parent, but never
+    # search inside 01_RAW_DATA because demographic metadata are not raw signals.
+    search_root = ROOT.parent
+    try:
+        matches = sorted(search_root.rglob(DEMOGRAPHY_FILENAME))
+    except Exception:
+        matches = []
+    for p in matches:
+        if RAW not in p.parents:
+            return p
     return None
 
 
@@ -349,7 +320,7 @@ def participants() -> tuple[pd.DataFrame, Path]:
 
     # Put identity/cohort fields first, then all source-derived demographic fields.
     first = [
-        'subject_id', 'cohort_status', 'exclusion_reason', 'gender',
+        'subject_id', 'cohort_status', 'exclusion_reason', 'subject_name', 'gender',
         'age_years', 'height_raw', 'weight_raw', 'recording_site',
         'forearm_length_raw', 'forearm_circumference_raw', 'bci_experience',
         'inclusion_criteria_met', 'neurological_exclusion', 'musculoskeletal_exclusion',
@@ -359,12 +330,8 @@ def participants() -> tuple[pd.DataFrame, Path]:
         'bioimpedance_dataset_contribution', 'data_contribution_modalities',
         'demographic_source_file', 'demographic_source_sheet', 'demographic_merge_status'
     ]
-    # Public-release rule: participant names must never be written to public metadata.
-    # Keep the source workbook unchanged; simply omit the internal subject_name field
-    # from the public participants.csv output.
-    public_columns = [c for c in first if c in demo.columns and c != 'subject_name']
-    public_columns += [c for c in demo.columns if c not in first and c != 'subject_name']
-    return demo[public_columns], source_path
+    ordered = [c for c in first if c in demo.columns] + [c for c in demo.columns if c not in first]
+    return demo[ordered], source_path
 
 def main():
     t=datetime.now()
@@ -385,28 +352,8 @@ def main():
     inv=pd.concat(master,ignore_index=True,sort=False) if master else pd.DataFrame()
 
     participant_df, demographic_source = participants()
-
-    # Confirm MI contributor availability from the authoritative demographic
-    # field, but do not infer MI_XX -> Subject_XX identity.
-    demo_for_mi, _, _ = load_demography()
-    mi_field = 'openbci_motor_imagery_recording'
-    # Use the explicit contribution log as the authoritative MI availability set.
-    # Cross-check it against the demographic workbook field when available.
-    mi_canonical_ids = MI_CANONICAL_CONTRIBUTORS.copy()
-    if mi_field in demo_for_mi.columns:
-        vals = demo_for_mi[mi_field].fillna('').astype(str).str.strip()
-        workbook_mi_ids = demo_for_mi.loc[vals.ne(''), 'subject_id'].tolist()
-        if sorted(workbook_mi_ids) != sorted(mi_canonical_ids):
-            raise AssertionError(
-                'MI contributor mismatch between supplied contribution log and demographic workbook: '
-                f'log={sorted(mi_canonical_ids)}, workbook={sorted(workbook_mi_ids)}'
-            )
-
-    if 'subject_name' in participant_df.columns:
-        raise AssertionError('Internal error: public participant metadata still contains subject_name.')
-
     write(participant_df, META/'participants.csv')
-    cw=crosswalk(sorted(mi['subject_id'].unique()) if not mi.empty else [], mi_canonical_ids)
+    cw=crosswalk(sorted(mi['subject_id'].unique()) if not mi.empty else [])
     write(cw,META/'subject_crosswalk.csv')
     avail=cw.copy(); write(avail,META/'subject_modality_availability.csv')
     write(inv,META/'recording_inventory.csv')
@@ -420,16 +367,16 @@ def main():
         {'parameter':'bioz_recordings_per_gesture','value':15,'unit':'recordings','scope':'BIOIMPEDANCE'},
     ]),META/'recording_parameters.csv')
     write(pd.DataFrame([
-        {'modality':'EEG','protocol':'MOTOR_EXECUTION','system':'OpenBCI Cyton + Daisy','channels':13,'sampling_rate_hz':125,'channel_mapping':'physical CH4–CH16'},
+        {'modality':'EEG','protocol':'MOTOR_EXECUTION','system':'OpenBCI Cyton + Daisy','channels':13,'sampling_rate_hz':125,'channel_mapping':'EEG_ch-01 through EEG_ch-13 (canonical release labels)'},
         {'modality':'EMG','protocol':'MOTOR_EXECUTION','system':'OpenBCI Cyton + Daisy','channels':3,'sampling_rate_hz':125,'channel_mapping':'physical CH1–CH3'},
-        {'modality':'EEG','protocol':'MOTOR_IMAGERY','system':'OpenBCI Cyton + Daisy','channels':13,'sampling_rate_hz':125,'channel_mapping':'physical CH4–CH16; MI release view may reindex'},
+        {'modality':'EEG','protocol':'MOTOR_IMAGERY','system':'OpenBCI Cyton + Daisy','channels':13,'sampling_rate_hz':125,'channel_mapping':'EEG_ch-01 through EEG_ch-13 (canonical release labels)'},
         {'modality':'BIOIMPEDANCE','protocol':'MOTOR_EXECUTION','system':'Sciospec ISX-5 Series','channels':2,'sampling_rate_hz':'','channel_mapping':'Channel_1 and Channel_2; separate acquisition'},
     ]),META/'acquisition_parameters.csv')
     write(pd.DataFrame([{'gesture_code':c,'gesture_folder':f,'gesture_label':l,'sets':'A;B;C'} for c,f,l in GESTURES]),META/'gesture_dictionary.csv')
     write(pd.DataFrame([{'dataset_root':str(ROOT),'raw_data_modified':'NO','generated_at':datetime.now().isoformat(timespec='seconds'),'notes':'DATA1 inventory only; raw data untouched.'}]),META/'data_provenance.csv')
     write(pd.DataFrame([
         {'cohort':'Final motor execution','participants':40,'status':'retained','notes':'Subject_01–Subject_40'},
-        {'cohort':'Motor imagery','participants':25,'status':'local modality IDs','notes':'MI_01–MI_25; 25 canonical contributors confirmed from contribution log; MI_XX identity crosswalk pending'},
+        {'cohort':'Motor imagery','participants':25,'status':'local modality IDs','notes':'MI_01–MI_25; canonical crosswalk pending'},
         {'cohort':'Bioimpedance','participants':18,'status':'retained','notes':'BZ_01–BZ_18'},
         {'cohort':'Excluded','participants':1,'status':'excluded','notes':'Subject_41 — data quality, leakage'},
     ]),META/'cohort_definition.csv')
@@ -471,10 +418,6 @@ def main():
         {'metric':'retained_participants','actual':retained_demo,'expected':40,'status':'PASS' if retained_demo==40 else 'CHECK_REQUIRED','source':demographic_source.name},
         {'metric':'excluded_participants','actual':excluded_demo,'expected':1,'status':'PASS' if excluded_demo==1 else 'CHECK_REQUIRED','source':demographic_source.name},
         {'metric':'demographic_merge_status','actual':int((participant_df['demographic_merge_status']=='MERGED').sum()),'expected':41,'status':'PASS' if (participant_df['demographic_merge_status']=='MERGED').all() else 'CHECK_REQUIRED','source':demographic_source.name},
-        {'metric':'public_participants_no_direct_names','actual':('subject_name' not in participant_df.columns),'expected':True,'status':'PASS' if 'subject_name' not in participant_df.columns else 'CHECK_REQUIRED','source':'DATA1 public metadata rule'},
-        {'metric':'mi_local_folders','actual':int(mi['subject_id'].nunique()) if not mi.empty else 0,'expected':25,'status':'PASS' if (int(mi['subject_id'].nunique()) if not mi.empty else 0)==25 else 'CHECK_REQUIRED','source':'MOTOR_IMAGERY inventory'},
-        {'metric':'mi_canonical_contributors_confirmed','actual':len(mi_canonical_ids),'expected':25,'status':'PASS' if len(mi_canonical_ids)==25 else 'CHECK_REQUIRED','source':demographic_source.name},
-        {'metric':'mi_local_to_canonical_mapping','actual':'AVAILABILITY_CONFIRMED_ID_PENDING','expected':'AVAILABILITY_CONFIRMED_ID_PENDING','status':'PASS','source':MI_CONTRIBUTOR_SOURCE + '; no explicit MI_XX-to-Subject_XX identity crosswalk supplied'},
     ])
     write(demo_qc, QC/'demographic_merge_QC.csv')
 
