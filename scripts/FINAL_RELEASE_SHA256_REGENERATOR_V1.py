@@ -3,7 +3,20 @@ from pathlib import Path
 from datetime import datetime, timezone
 import csv, hashlib, json, shutil, sys
 
-ROOT=Path('/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/EEG_EMG_BIOZ_DATASET')
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").is_dir():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").is_dir():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Could not locate dataset root. Expected 01_RAW_DATA "
+        "in the script directory or its parent."
+    )
+
+ROOT = ROOT.resolve()
 RELEASE=ROOT/'09_RELEASE'/'DATASET_V1.0'
 R_SHA=RELEASE/'SHA256SUMS_RELEASE_V1.0'
 FREEZE=ROOT/'05_QC'/'DATASET_FREEZE'
@@ -36,11 +49,11 @@ def main():
 
     sr=SOURCE_SHA/'SHA256_CHECKSUM_FINAL_REPORT.json'; req(sr,'source SHA-256 report')
     s=rj(sr)
-    checks={'freeze_status_verified':True,'freeze_sentinel_status':'FROZEN','checksum_algorithm':'SHA-256','files_hashed':18622,'read_only':True,'raw_data_modified':False,'processed_data_modified':False,'preprocessing_rerun':False,'feature_extraction':False,'machine_learning':False,'fusion_generation':False}
+    checks={'freeze_status_verified':True,'freeze_sentinel_status':'FROZEN','checksum_algorithm':'SHA-256','files_hashed':18588,'read_only':True,'raw_data_modified':False,'processed_data_modified':False,'preprocessing_rerun':False,'feature_extraction':False,'machine_learning':False,'fusion_generation':False}
     for k,v in checks.items():
         if s.get(k)!=v: die(f'source SHA report {k}={s.get(k)!r}, expected {v!r}')
-    if s.get('checksum_catalog_sha256')!='1a5bcb14c598205f8a497215d8a54aea466b1ae9ec15dc0433b42b66ae250ec6': die('source catalog hash mismatch')
-    print('[2/6] Verifying source SHA-256... PASS | files=18622')
+    if s.get('checksum_catalog_sha256')!='50459fa6298fc8a0487a7bebd18e63bedd86a22514b8ab821e9eab0d8fdb76bb': die('source catalog hash mismatch')
+    print('[2/6] Verifying source SHA-256... PASS | files=18588')
 
     for p in ['DATA','ANNOTATIONS','METADATA','MODALITY_VIEWS','QC','DOCUMENTATION','RELEASE_NOTES.md','SHA256SUMS_SOURCE_V1.0']:
         req(RELEASE/p,'release component')
@@ -49,8 +62,33 @@ def main():
     docs=['README_DATASET_V1.0.md','DATASET_DESCRIPTION_V1.0.md','DATA_DICTIONARY_V1.0.md','ACQUISITION_AND_STANDARDIZATION_PROTOCOL_V1.0.md','ANNOTATION_GUIDE_V1.0.md','QUALITY_CONTROL_REPORT_V1.0.md','MODALITY_AND_SYNCHRONIZATION_GUIDE_V1.0.md','ETHICS_AND_DATA_GOVERNANCE_V1.0.md','DATA_ACCESS_AND_RELEASE_GUIDE_V1.0.md','DOCUMENTATION_INDEX_V1.0.md','DOCUMENTATION_MANIFEST_V1.0.csv','DOCUMENTATION_GENERATION_SUMMARY_V1.0.txt','DOCUMENTATION_GENERATION_FINAL_REPORT.json']
     for n in docs: req(DOC/n,'release documentation file')
     dr=rj(DOC/'DOCUMENTATION_GENERATION_FINAL_REPORT.json')
-    for k in ['external_facts_inferred','raw_data_modified','processed_data_modified','preprocessing_rerun','feature_extraction_performed','machine_learning_performed','fusion_generation_performed']:
-        if dr.get(k) is not False: die(f'documentation report {k} is not False')
+
+    required_doc_values = {
+        'external_facts_inferred': False,
+        'raw_data_modified': False,
+        'processed_data_modified': False,
+        'preprocessing_rerun': False,
+        'feature_extraction_performed': False,
+        'machine_learning_performed': False,
+        'fusion_generation_performed': False,
+    }
+    for k, expected in required_doc_values.items():
+        if dr.get(k) is not expected:
+            die(f'documentation report {k}={dr.get(k)!r}, expected {expected!r}')
+
+    if dr.get('dataset_version') != 'V1.0':
+        die(f"documentation report dataset_version={dr.get('dataset_version')!r}, expected 'V1.0'")
+
+    if dr.get('source_sha256_files_hashed') != 18588:
+        die(
+            'documentation report source_sha256_files_hashed='
+            f"{dr.get('source_sha256_files_hashed')!r}, expected 18588"
+        )
+
+    if dr.get('source_checksum_catalog_sha256') != (
+        '50459fa6298fc8a0487a7bebd18e63bedd86a22514b8ab821e9eab0d8fdb76bb'
+    ):
+        die('documentation report source checksum catalog SHA-256 mismatch')
     print('[4/6] Verifying final documentation... PASS | 13 files present')
 
     R_SHA.mkdir(parents=True,exist_ok=True)
@@ -69,8 +107,9 @@ def main():
     with (R_SHA/'SHA256SUMS_RELEASE_V1.0.txt').open('w',encoding='utf-8') as f:
         for d,p in entries: f.write(f'{d}  {p}\n')
     cat=sha(R_SHA/'SHA256SUMS_RELEASE_V1.0.csv')
-    report={'dataset_version':'V1.0','protocol_version':PROTO,'generated_at_utc':datetime.now(timezone.utc).isoformat(),'release_root':str(RELEASE),'source_freeze_verified':True,'source_sha256_verified':True,'checksum_algorithm':'SHA-256','files_hashed':len(entries),'release_checksum_csv':'SHA256SUMS_RELEASE_V1.0/SHA256SUMS_RELEASE_V1.0.csv','release_checksum_text':'SHA256SUMS_RELEASE_V1.0/SHA256SUMS_RELEASE_V1.0.txt','release_checksum_catalog_sha256':cat,'excluded_paths':['SHA256SUMS_RELEASE_V1.0/'],'raw_data_modified':False,'processed_data_modified':False,'preprocessing_rerun':False,'feature_extraction':False,'machine_learning':False,'fusion_generation':False,'documentation_included':True}
+    report={'dataset_version':'V1.0','protocol_version':PROTO,'generated_at_utc':datetime.now(timezone.utc).isoformat(),'release_root':str(RELEASE),'source_sha256_report':str(sr.relative_to(ROOT)),'source_freeze_verified':True,'source_sha256_verified':True,'source_sha256_files_hashed':18588,'source_checksum_catalog_sha256':'50459fa6298fc8a0487a7bebd18e63bedd86a22514b8ab821e9eab0d8fdb76bb','checksum_algorithm':'SHA-256','files_hashed':len(entries),'release_checksum_csv':'SHA256SUMS_RELEASE_V1.0/SHA256SUMS_RELEASE_V1.0.csv','release_checksum_text':'SHA256SUMS_RELEASE_V1.0/SHA256SUMS_RELEASE_V1.0.txt','release_checksum_catalog_sha256':cat,'excluded_paths':['SHA256SUMS_RELEASE_V1.0/'],'raw_data_modified':False,'processed_data_modified':False,'preprocessing_rerun':False,'feature_extraction':False,'machine_learning':False,'fusion_generation':False,'documentation_included':True,'physiological_signal_values_modified':False,'sample_index_metadata_corrected_in_prior_stage':True}
     (R_SHA/'RELEASE_SHA256_FINAL_REPORT.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+    req(R_SHA/'RELEASE_SHA256_FINAL_REPORT.json','final release SHA-256 report')
     print(f'[5/6] Generating final release SHA-256 catalog... PASS | files={len(entries)}')
 
     with (R_SHA/'SHA256SUMS_RELEASE_V1.0.csv').open(encoding='utf-8') as f: rows=list(csv.DictReader(f))
@@ -82,5 +121,5 @@ def main():
     if sha(R_SHA/'SHA256SUMS_RELEASE_V1.0.csv')!=cat: die('catalog self-hash mismatch')
     print('[6/6] Verifying final release checksum catalog... PASS')
     print('\n'+'='*72); print('FINAL RELEASE SHA-256: COMPLETE'); print('='*72)
-    print('Release files hashed       :',len(entries)); print('Checksum algorithm         : SHA-256'); print('Catalog SHA-256            :',cat); print('Documentation included     : True'); print('Raw data modified          : False'); print('Processed data modified    : False'); print('Preprocessing rerun        : False'); print('Feature extraction         : False'); print('Machine learning           : False'); print('Fusion generation          : False'); print('='*72); print('DATASET V1.0 RELEASE INTEGRITY STAGE: COMPLETE'); print('='*72)
+    print('Release files hashed       :',len(entries)); print('Checksum algorithm         : SHA-256'); print('Catalog SHA-256            :',cat); print('Documentation included     : True'); print('Physiological signal values modified : False'); print('Sample Index metadata corrected in prior stage : True'); print('Processed data modified    : False'); print('Preprocessing rerun        : False'); print('Feature extraction         : False'); print('Machine learning           : False'); print('Fusion generation          : False'); print('='*72); print('DATASET V1.0 RELEASE INTEGRITY STAGE: COMPLETE'); print('='*72)
 if __name__=='__main__': main()
