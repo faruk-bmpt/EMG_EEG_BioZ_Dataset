@@ -1,4 +1,6 @@
-##########################################################################
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 ===============================================================================
 DATASET V1.0 FINAL RELEASE PACKAGER
@@ -52,10 +54,18 @@ from pathlib import Path
 # DATASET ROOT
 # =============================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-).resolve()
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+if (SCRIPT_DIR / "01_RAW_DATA").is_dir():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").is_dir():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA beside "
+        "the script or in its parent directory."
+    )
+ROOT = ROOT.resolve()
 
 RELEASE_ROOT = (
     ROOT /
@@ -254,6 +264,36 @@ def verify_checksum_stage():
         raise RuntimeError(
             "Checksum stage was not marked read-only."
         )
+
+    if report.get("files_hashed") != 18588:
+        raise RuntimeError(
+            "Source SHA-256 file count mismatch: "
+            f"{report.get('files_hashed')!r}; expected 18588."
+        )
+
+    expected_catalog = (
+        "50459fa6298fc8a0487a7bebd18e63bedd86a22514b8ab821e9eab0d8fdb76bb"
+    )
+    if report.get("checksum_catalog_sha256") != expected_catalog:
+        raise RuntimeError(
+            "Source SHA-256 catalog hash mismatch: "
+            f"{report.get('checksum_catalog_sha256')!r}; "
+            f"expected {expected_catalog}."
+        )
+
+    for key in (
+        "raw_data_modified",
+        "processed_data_modified",
+        "preprocessing_rerun",
+        "feature_extraction",
+        "machine_learning",
+        "fusion_generation",
+    ):
+        if report.get(key) is not False:
+            raise RuntimeError(
+                f"Source checksum report indicates unexpected {key}="
+                f"{report.get(key)!r}."
+            )
 
     return report
 
@@ -470,24 +510,47 @@ def build_release():
     # ------------------------------------------------------------
     # DOCUMENTATION
     #
-    # Documentation is copied only if the source directory exists.
-    # No documentation is fabricated by this script.
+    # Documentation was generated in the preceding stage and is
+    # required for the final V1.0 release package.
     # ------------------------------------------------------------
 
     documentation_source = ROOT / "08_DOCUMENTATION"
 
-    if documentation_source.exists():
-
-        copy_tree(
-            documentation_source,
-            RELEASE_ROOT / "DOCUMENTATION",
+    if not documentation_source.is_dir():
+        raise FileNotFoundError(
+            f"Required documentation source directory missing: "
+            f"{documentation_source}"
         )
 
-        documentation_status = "COPIED"
+    required_documentation = [
+        "README_DATASET_V1.0.md",
+        "DATASET_DESCRIPTION_V1.0.md",
+        "DATA_DICTIONARY_V1.0.md",
+        "ACQUISITION_AND_STANDARDIZATION_PROTOCOL_V1.0.md",
+        "ANNOTATION_GUIDE_V1.0.md",
+        "QUALITY_CONTROL_REPORT_V1.0.md",
+        "MODALITY_AND_SYNCHRONIZATION_GUIDE_V1.0.md",
+        "ETHICS_AND_DATA_GOVERNANCE_V1.0.md",
+        "DATA_ACCESS_AND_RELEASE_GUIDE_V1.0.md",
+        "DOCUMENTATION_INDEX_V1.0.md",
+        "DOCUMENTATION_MANIFEST_V1.0.csv",
+        "DOCUMENTATION_GENERATION_SUMMARY_V1.0.txt",
+        "DOCUMENTATION_GENERATION_FINAL_REPORT.json",
+    ]
 
-    else:
+    for filename in required_documentation:
+        if not (documentation_source / filename).is_file():
+            raise FileNotFoundError(
+                f"Required documentation file missing: "
+                f"{documentation_source / filename}"
+            )
 
-        documentation_status = "NOT_PRESENT_IN_SOURCE_DATASET"
+    copy_tree(
+        documentation_source,
+        RELEASE_ROOT / "DOCUMENTATION",
+    )
+
+    documentation_status = "COPIED"
 
     # ------------------------------------------------------------
     # SOURCE CHECKSUMS
@@ -801,19 +864,19 @@ def release_inventory():
             RELEASE_ROOT
         ).as_posix()
 
-        if "/01_RAW_DATA/EMG_EEG_SYNCHRONIZED/" in rel:
+        if "DATA/01_RAW_DATA/EMG_EEG_SYNCHRONIZED/" in rel:
             if path.suffix.lower() == ".csv":
                 counts["raw_csv"] += 1
 
-        if "/01_RAW_DATA/EEG_MOTOR_IMAGERY/" in rel:
+        if "DATA/01_RAW_DATA/EEG_MOTOR_IMAGERY/" in rel:
             if path.suffix.lower() == ".csv":
                 counts["mi_csv"] += 1
 
-        if "/01_RAW_DATA/BIOIMPEDANCE/" in rel:
+        if "DATA/01_RAW_DATA/BIOIMPEDANCE/" in rel:
             if path.suffix.lower() == ".spec":
                 counts["bioz_spec"] += 1
 
-        if "/06_PROCESSED_DATA/" in rel:
+        if "DATA/06_PROCESSED_DATA/" in rel:
             if path.suffix.lower() == ".npz":
                 counts["processed_npz"] += 1
 
@@ -912,6 +975,19 @@ def main():
 
     counts = release_inventory()
 
+    expected_counts = {
+        "raw_csv": EXPECTED_EXECUTION,
+        "mi_csv": EXPECTED_MI,
+        "bioz_spec": EXPECTED_BIOZ_FILES,
+        "processed_npz": EXPECTED_TOTAL_PROCESSED_NPZ,
+    }
+    for key, expected in expected_counts.items():
+        if counts[key] != expected:
+            raise RuntimeError(
+                f"Final release inventory mismatch for {key}: "
+                f"{counts[key]} != expected {expected}"
+            )
+
     runtime = time.time() - start
 
     print()
@@ -967,6 +1043,11 @@ def main():
     )
 
     print("-" * 78)
+
+    print(
+        f"Documentation status      : "
+        f"{documentation_status}"
+    )
 
     print(
         f"Release checksum files    : "
