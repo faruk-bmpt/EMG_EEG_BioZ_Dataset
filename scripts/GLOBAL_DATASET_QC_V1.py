@@ -48,10 +48,21 @@ import numpy as np
 # 1. CONFIGURATION
 # ====================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-)
+# Resolve the dataset root from the script location so the same canonical
+# script works on the frozen Windows dataset layout without hard-coded
+# Linux/WSL paths.
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA under the "
+        "script directory or its parent."
+    )
 
 RAW = ROOT / "01_RAW_DATA"
 PROCESSED = ROOT / "06_PROCESSED_DATA"
@@ -1071,7 +1082,7 @@ def processed_structure_qc():
             reason = repr(e)
 
         rows.append({
-            "modality": "EMG",
+            "modality": "EMG_MOTOR_EXECUTION",
             "file": str(
                 path.relative_to(ROOT)
             ),
@@ -1519,7 +1530,7 @@ def final_report(
 
             "PRE1_EEG": "COMPLETE",
 
-            "PRE2_EMG": "COMPLETE",
+            "PRE2_EMG_MOTOR_EXECUTION": "COMPLETE",
 
             "PRE3_BIOIMPEDANCE": "COMPLETE",
         },
