@@ -84,10 +84,20 @@ from typing import Iterable
 # 1. CONFIGURATION
 # ====================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-)
+# Resolve the dataset root from the script location so the canonical
+# pipeline works with the frozen Windows dataset layout.
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Cannot locate dataset root. Expected 01_RAW_DATA under the "
+        "script directory or its parent."
+    )
 
 RAW = ROOT / "01_RAW_DATA"
 PROCESSED = ROOT / "06_PROCESSED_DATA"
@@ -784,7 +794,7 @@ def create_emg_manifest() -> dict:
 
         rows.append({
             "dataset_version": DATASET_VERSION,
-            "modality": "EMG",
+            "modality": "EMG_MOTOR_EXECUTION",
             "protocol": "MOTOR_EXECUTION",
             "subject_id": subject or "",
             "gesture_code": gesture_code or "",
@@ -1025,7 +1035,7 @@ def create_bioz_manifest() -> dict:
         rows.append({
             "dataset_version": DATASET_VERSION,
             "modality": "BIOIMPEDANCE",
-            "protocol": "MOTOR_EXECUTION",
+            "protocol": "BIOIMPEDANCE",
             "bioz_id": bz_id or "",
             "canonical_subject_id": subject or "",
             "gesture_code": gesture_code or "",
@@ -1179,7 +1189,7 @@ def create_summary(
             "status": eeg_mi["status"],
         },
         {
-            "modality": "EMG",
+            "modality": "EMG_MOTOR_EXECUTION",
             "manifest": relative_path(
                 EMG_VIEW / "EMG_manifest.csv"
             ),
