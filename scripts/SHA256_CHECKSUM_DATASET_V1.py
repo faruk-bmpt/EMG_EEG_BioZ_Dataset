@@ -47,10 +47,22 @@ from pathlib import Path
 # DATASET ROOT
 # =============================================================================
 
-ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/Data_Set_Paper_Work/"
-    "EEG_EMG_BIOZ_DATASET"
-).resolve()
+# Resolve the dataset root robustly from the canonical script location.
+# The script is expected to live in the dataset's scripts/ directory.
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+if (SCRIPT_DIR / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR
+elif (SCRIPT_DIR.parent / "01_RAW_DATA").exists():
+    ROOT = SCRIPT_DIR.parent
+else:
+    raise FileNotFoundError(
+        "Could not locate the dataset root. Expected '01_RAW_DATA' "
+        f"under either {SCRIPT_DIR} or {SCRIPT_DIR.parent}."
+    )
+
+ROOT = ROOT.resolve()
 
 FREEZE = ROOT / "05_QC" / "DATASET_FREEZE"
 
