@@ -53,11 +53,10 @@ import pandas as pd
 # ============================================================
 
 ROOT = Path(
-    "/mnt/f/Faruk/OFS_Paper_Work/"
-    "Data_Set_Paper_Work/EEG_EMG_BIOZ_DATASET"
+    r"F:\Faruk\OFS_Paper_Work\Data_Set_Paper_Work\EEG_EMG_BIOZ_DATASET"
 )
 
-RAW_ROOT = ROOT / "01_RAW_DATA" / "MOTOR_EXECUTION"
+RAW_ROOT = ROOT / "01_RAW_DATA" / "EMG_EEG_SYNCHRONIZED"
 
 QC_ROOT = ROOT / "05_QC" / "TIMESTAMP_INDEX_SIGNAL_INSPECTION"
 
@@ -859,8 +858,10 @@ def main():
         "classification",
     ]
 
+    available_display_cols = [c for c in display_cols if c in major.columns]
+
     print(
-        major[display_cols]
+        major[available_display_cols]
         .to_string(index=False)
     )
 
