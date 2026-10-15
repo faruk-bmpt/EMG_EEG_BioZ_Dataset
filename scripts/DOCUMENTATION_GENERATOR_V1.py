@@ -69,7 +69,7 @@ SHA_CSV = SHA_DIR / "SHA256SUMS_V1.0.csv"
 SHA_TXT = SHA_DIR / "SHA256SUMS_V1.0.txt"
 
 DATASET_VERSION = "V1.0"
-PROTOCOL_VERSION = "DOCUMENTATION-GENERATOR-DATASET-V1.0-FINAL"
+PROTOCOL_VERSION = "DOCUMENTATION-GENERATOR-DATASET-V1.0-ETHICS-DOI-CANONICAL-IDS"
 
 
 # ============================================================
@@ -452,8 +452,15 @@ The motor-imagery component contains:
 Motor imagery is a separate EEG-only component. EMG was not recorded for
 this component.
 
-MI identifiers are independent from execution Subject_ID identifiers.
-The release does not assert an MI_ID-to-execution-Subject_ID mapping.
+MI identifiers are modality-specific source identifiers. They are mapped to
+canonical participant IDs through the authoritative subject crosswalk created
+from the demographic workbook `Data set Demography .xlsx`. Do not infer
+this mapping by matching numbers in MI_ID and Subject_ID.
+
+The 25 mapped motor-imagery participants are:
+Subject_01, Subject_02, Subject_05, Subject_18–Subject_24, and
+Subject_26–Subject_40. Subject_25 is not part of the retained MI cohort.
+See `CANONICAL_SUBJECT_ID_GUIDE_V1.0.md` for the full crosswalk explanation.
 
 For processed MI EEG, original physical EEG channels CH4–CH16 were reindexed
 to MI-EEG CH1–CH13. The signal values were not changed by this relabeling.
@@ -770,8 +777,12 @@ signal channels are EMG and the remaining 13 are EEG.
 
 Motor imagery is EEG-only. There is no corresponding EMG stream in V1.0.
 
-MI IDs are independent identifiers. MI_01 must not be assumed to be
-Subject_01.
+MI IDs are modality-specific identifiers and are mapped to canonical
+participant IDs using the authoritative `subject_crosswalk.csv`, derived from
+`Data set Demography.xlsx`. Never infer identity from matching numeric
+suffixes. The retained MI canonical cohort is Subject_01, Subject_02,
+Subject_05, Subject_18–Subject_24, and Subject_26–Subject_40. See
+`CANONICAL_SUBJECT_ID_GUIDE_V1.0.md` for the complete explanation.
 
 ## Bioimpedance
 
@@ -785,6 +796,80 @@ current V1.0 release. A future fusion product should receive its own
 version, provenance, and validation.
 """
 
+    documents["CANONICAL_SUBJECT_ID_GUIDE_V1.0.md"] = """# Canonical Subject ID and Crosswalk Guide V1.0
+
+## Purpose
+
+`canonical_subject_id` is the shared anonymized participant key used to
+connect modality records that belong to the same retained participant. It
+supports cross-modality organization without exposing participant names.
+Canonical IDs must be read from `03_METADATA/subject_crosswalk.csv`; do not
+create mappings by matching numeric suffixes.
+
+## Identifier types
+
+- `canonical_subject_id`: the common anonymized key, formatted as
+  `Subject_01`, `Subject_02`, and so on.
+- `subject_id` / execution subject ID: the canonical participant identifier
+  used for motor-execution EEG–EMG records.
+- `mi_id`: the original motor-imagery source identifier (`MI_01`–`MI_25`).
+  It is modality-specific and must be translated through the crosswalk.
+- `bioz_id`: the original bioimpedance source identifier (`BZ_01`–`BZ_18`).
+  It is modality-specific and must be translated through the crosswalk.
+
+## Canonical cohorts represented in V1.0
+
+### Motor execution EEG and EMG
+
+The retained cohort is `Subject_01`–`Subject_40` (40 participants). EEG and
+EMG are recorded in the same OpenBCI CSV stream and are sample-level
+synchronized. Each participant has seven gesture classes and sets A, B, and C.
+
+### Motor imagery EEG
+
+The 25 canonical participants are:
+
+`Subject_01`, `Subject_02`, `Subject_05`, `Subject_18`–`Subject_24`, and
+`Subject_26`–`Subject_40`.
+
+This is a verified mapping from the authoritative demographic workbook
+`Data set Demography.xlsx`, using its `MI_ID` and `BZ_ID` fields and the
+generated subject crosswalk. `MI_01` does **not** mean `Subject_01` unless the
+crosswalk explicitly says so. `Subject_25` is not in the retained MI cohort.
+Motor imagery is EEG-only in V1.0; no corresponding MI EMG stream is included.
+
+### Bioimpedance
+
+The 18 canonical participants are:
+
+`Subject_01`–`Subject_15`, `Subject_17`, `Subject_29`, and `Subject_39`.
+
+Their original source identifiers are `BZ_01`–`BZ_18`; each `BZ_ID` must be
+resolved using `subject_crosswalk.csv`, not by numeric suffix. Bioimpedance
+was acquired independently with a Sciospec ISX-5 as a frequency-domain
+measurement and is not sample-synchronized to EEG/EMG or MI.
+
+## How to use the crosswalk
+
+1. Read `03_METADATA/subject_crosswalk.csv`.
+2. Match `mi_id` or `bioz_id` to the row containing that exact source ID.
+3. Use that row's `canonical_subject_id` to join modality-specific records.
+4. Keep the original modality ID and file path in derived tables for traceability.
+5. Do not overwrite raw filenames or treat a missing modality as a failed
+   participant record; cohort overlap differs by modality.
+
+Expected retained cohort sizes are 40 motor-execution EEG–EMG participants,
+25 motor-imagery EEG participants, and 18 BioZ participants. The BioZ and MI
+cohorts overlap with the execution cohort but are not identical to one another.
+
+## Scope and limitations
+
+Canonical IDs establish dataset-level linkage only. They do not establish
+that different modalities were recorded simultaneously. In particular, BioZ
+is an independent frequency-domain acquisition, and the V1.0 release does
+not contain a validated synchronized EEG–EMG–BioZ fusion dataset.
+"""
+
     documents["ETHICS_AND_DATA_GOVERNANCE_V1.0.md"] = """# Ethics and Data Governance V1.0
 
 ## Participant governance
@@ -792,19 +877,20 @@ version, provenance, and validation.
 The demography source records consent and public-data-release fields.
 The public package uses anonymized participant identifiers.
 
-## Ethics documentation
+## Ethics approval
 
-Available ethics documentation records:
+Ethics approval has been granted by the **Ethical Review Committee,
+Faculty of Biological Sciences, University of Dhaka**.
 
-Reference:
-`323/Biol. Scs./2025-2026`
+- Approval reference: `323/Biol. Scs.`
+- Approval date: `12 October 2025`
+- Approval status: **Approved**
 
-Date:
-`27 August 2025`
-
-The available document describes the application as **under process**.
-
-This documentation therefore does not claim final ethics approval.
+This statement records the approval information supplied for this dataset.
+The approval document and any applicable consent/public-release conditions
+should be retained with the research records. Public files use anonymized
+participant identifiers; no direct participant names are included in the
+release metadata.
 
 ## Demographic field interpretation
 
@@ -813,10 +899,19 @@ describes the recording site rather than handedness.
 
 V1.0 therefore does not claim that handedness was separately recorded.
 
+## Canonical identifiers and privacy
+
+Canonical IDs (`Subject_01`, etc.) are anonymized dataset-level identifiers,
+not participant names or externally meaningful identity numbers. The
+modality-specific source IDs (`MI_ID` and `BZ_ID`) are linked to canonical IDs
+only through the documented crosswalk generated from `Data set Demography.xlsx`. Do not infer mappings from numeric suffixes or attempt to
+re-identify participants. See `CANONICAL_SUBJECT_ID_GUIDE_V1.0.md`.
+
 ## Public release
 
-Users should not attempt to reconstruct participant identities or infer
-the MI_ID-to-execution-Subject_ID mapping.
+The dataset is prepared for public release under the selected **Creative
+Commons Attribution 4.0 International (CC BY 4.0)** licence, subject to the
+repository's final publication state and any ethics/consent conditions.
 
 ## Version governance
 
@@ -864,9 +959,19 @@ Feature extraction, machine learning, alternative windowing, and fusion
 are downstream analyses. They should be documented as derived analyses or
 separately versioned derived products.
 
-## DOI
+## Repository DOI and licence
 
-A public repository DOI is not assigned in this documentation yet.
+Reserved Figshare DOI: `10.6084/m9.figshare.34421721`
+
+DOI URL: https://doi.org/10.6084/m9.figshare.34421721
+
+The DOI was reserved for this dataset record. A reserved DOI does not by
+itself prove that the Figshare record is already publicly published; confirm
+the repository status before describing the dataset as published.
+
+Selected licence: **Creative Commons Attribution 4.0 International (CC BY 4.0)**.
+When reusing the dataset, cite the dataset DOI and provide appropriate
+attribution as required by the licence.
 """
 
     documents["DOCUMENTATION_INDEX_V1.0.md"] = """# Documentation Index V1.0
@@ -880,6 +985,7 @@ A public repository DOI is not assigned in this documentation yet.
 | `ANNOTATION_GUIDE_V1.0.md` | Labels and annotation limitations |
 | `QUALITY_CONTROL_REPORT_V1.0.md` | Final QC state |
 | `MODALITY_AND_SYNCHRONIZATION_GUIDE_V1.0.md` | Modality relationships |
+| `CANONICAL_SUBJECT_ID_GUIDE_V1.0.md` | Canonical IDs and modality crosswalks |
 | `ETHICS_AND_DATA_GOVERNANCE_V1.0.md` | Ethics and governance |
 | `DATA_ACCESS_AND_RELEASE_GUIDE_V1.0.md` | Release/use guidance |
 | `DOCUMENTATION_INDEX_V1.0.md` | Documentation map |
@@ -964,6 +1070,13 @@ def main():
     generation_report = {
         "dataset_version": DATASET_VERSION,
         "protocol_version": PROTOCOL_VERSION,
+        "ethics_approval_status": "Approved",
+        "ethics_approval_body": "Ethical Review Committee, Faculty of Biological Sciences, University of Dhaka",
+        "ethics_approval_reference": "323/Biol. Scs.",
+        "ethics_approval_date": "2025-10-12",
+        "reserved_doi": "10.6084/m9.figshare.34421721",
+        "doi_url": "https://doi.org/10.6084/m9.figshare.34421721",
+        "licence": "CC BY 4.0",
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "freeze_verified": True,
         "source_sha256_verified": True,

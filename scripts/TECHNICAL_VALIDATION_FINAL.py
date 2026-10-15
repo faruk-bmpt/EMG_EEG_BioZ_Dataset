@@ -257,12 +257,9 @@ def save_table(df: pd.DataFrame, P: Paths, name: str, caption: str, markdown: bo
 
 
 def save_fig(fig, folder: Path, name: str, caption: str) -> None:
-    folder.mkdir(parents=True, exist_ok=True)
-    png_path = str((folder / f"{name}.png").resolve())
-    pdf_path = str((folder / f"{name}.pdf").resolve())
-    
-    fig.savefig(png_path, dpi=300, bbox_inches="tight")
-    fig.savefig(pdf_path, bbox_inches="tight")
+    fig.tight_layout()
+    fig.savefig(folder / f"{name}.png", dpi=300, bbox_inches="tight")
+    fig.savefig(folder / f"{name}.pdf", bbox_inches="tight")
     plt.close(fig)
     FIG_INDEX.append({"protocol": CURRENT_PROTOCOL, "figure": name, "folder": folder.name, "description": caption})
 
@@ -760,6 +757,7 @@ def plot_classification_summary(df_all_folds: pd.DataFrame, P: Paths) -> None:
         ax.set_title(f"Protocol: {PROTO_LABEL[proto]}")
         ax.grid(True, axis="y", ls=":", alpha=0.5)
         
+        # Position legend outside or cleanly in top corner to avoid overlapping content
         if idx == 0:
             ax.legend(loc="upper right", framealpha=0.9)
 
