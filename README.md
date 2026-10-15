@@ -10,7 +10,7 @@ The dataset supports research on motor execution (ME), motor imagery (MI), and h
 - **Surface electromyography (EMG):** 3 channels
 - **Bioimpedance (BioZ):** Electrical bioimpedance measurements
 
-EEG and EMG recordings were acquired using an OpenBCI Cyton and Daisy configuration. The first three acquisition channels were used for EMG, while the remaining channels were used for EEG analysis. BioZ measurements were acquired separately and should not be interpreted as sample-level synchronized with EEG and EMG.
+EEG and EMG recordings were acquired using an OpenBCI Cyton and Daisy configuration. The first three acquisition channels were used for EMG, while the remaining 13 channels were used for EEG analysis. BioZ measurements were acquired separately and should not be interpreted as sample-level synchronized with EEG and EMG.
 
 ## Repository Scope
 
@@ -30,7 +30,7 @@ This repository is intended for:
 - **Dataset DOI:** [10.6084/m9.figshare.34421721](https://doi.org/10.6084/m9.figshare.34421721)
 - **Dataset license:** Creative Commons Attribution 4.0 International (CC BY 4.0)
 
-The Figshare record is the designated source for the dataset files, metadata, accompanying documentation, and quality-control reports. Check the record for current publication status and the applicable terms of use.
+The Figshare record is the designated source for the dataset files, metadata, accompanying documentation, and quality-control reports.
 
 ## Dataset Contents
 
@@ -74,7 +74,7 @@ SHA-256 checksum catalogs are supplied with the release to help users verify fil
 
 ## Citation
 
-Please cite the dataset and its associated descriptor when using the data in publications or other research outputs. Verify the final citation against the metadata shown on Figshare after publication.
+Please cite the dataset and its associated descriptor when using the data in publications or other research outputs.
 
 **Proposed dataset citation:**
 
