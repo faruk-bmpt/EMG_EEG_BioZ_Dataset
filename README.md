@@ -78,7 +78,7 @@ Please cite the dataset and its associated descriptor when using the data in pub
 
 **Proposed dataset citation:**
 
-Faruk, O., Sayed, M. A., Nahiyan, K. M. T., Kadir, M. A., Wadud, M. S. I., & Al Imran, M. I. (2026). *A Multimodal Physiological Dataset for Hand Gesture Classification for Prosthetic Hand Control*. Figshare. https://doi.org/10.6084/m9.figshare.34421721
+Faruk, O., Sayed, M. A., Nahiyan, K. M. T., Kadir, M. A., Wadud, M. S. I., & Al Imran, M. I. (2026). *A Multimodal Physiological Dataset for Hand Gesture Classification for Prosthetic Hand Control* [Dataset]. Figshare. https://doi.org/10.6084/m9.figshare.34421721
 
 ## Versioning
 
